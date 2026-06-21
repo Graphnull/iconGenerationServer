@@ -1,78 +1,80 @@
 # Icon Generation Server
 
-Express-сервер для генерации иконок с использованием Ollama AI. Поддерживает кеширование результатов и окрашивание иконок в произвольный цвет.
+Express-based API server for generating icons using Ollama AI with automatic color customization and image processing.
 
-## Возможности
+## Features
 
-- 🎨 Генерация иконок через Ollama (модель x/flux2-klein:4b)
-- 🗄️ Кеширование по MD5 хешу `prompt:color`
-- 🎨 Окрашивание иконок в любой hex-цвет
-- ✂️ Автоматическая обрезка и ресайз до 256x256
-- 🔍 Greyscale + contrast для чётких контуров
+- 🎨 Generate icons using Ollama AI (x/flux2-klein:4b model)
+- 🎨 Apply custom colors to generated icons
+- 🗄️ Intelligent caching (MD5-based)
+- ✂️ Auto-crop and resize (256x256)
+- ⚡ High contrast processing for crisp outlines
 
-## Требования
+## Requirements
 
-- Node.js 18+
-- Ollama с установленной моделью `x/flux2-klein:4b`
+- **Node.js** 18+
+- **Ollama** with model `x/flux2-klein:4b`
 
 ```bash
-# Установка Ollama
+# Install Ollama (macOS)
+brew install ollama
+
+# Install Ollama (Linux)
 curl -fsSL https://ollama.com/install.sh | sh
 
-# Загрузка модели
+# Pull the model
 ollama pull x/flux2-klein:4b
 ```
 
-## Установка
+## Installation
 
 ```bash
 npm install
 ```
 
-## Запуск
+## Running the Server
 
 ```bash
-# Режим разработки (с hot-reload)
+# Development (with hot-reload)
 npm run dev
 
-# Продакшен
+# Production
 npm run build
 npm start
 ```
 
-Или через PM2:
-
+**Or use PM2:**
 ```bash
 pm2 start ecosystem.config.js
 ```
 
-Сервер запустится на порту 3000 (изменить: `PORT=8080 npm start`).
+The server starts on port **3000** by default. Change with: `PORT=8080 npm start`
 
 ## API Endpoints
 
 ### POST /icon
 
-Генерация иконки.
+Generate a new icon.
 
 **Request:**
 ```json
 {
-  "prompt": "robot-head",
-  "color": "#FF5733"
+  "prompt": "neon star",
+  "color": "#FF0055"
 }
 ```
 
-| Параметр | Тип   | Описание                          |
-|----------|-------|-----------------------------------|
-| prompt   | string | Текстовый промпт для генерации   |
-| color    | string | Hex-цвет (#RRGGBB или RRGGBB)    |
+| Field | Type   | Description                          |
+|-------|--------|--------------------------------------|
+| prompt| string | Text prompt for icon generation      |
+| color | string | Hex color code (#RRGGBB or RRGGBB)   |
 
 **Response (200):**
 ```json
 {
   "success": true,
   "cacheKey": "a1b2c3d4e5f6...",
-  "image": "data:image/png;base64,iVBORw0..."
+  "image": "data:image/png;base64,..."
 }
 ```
 
@@ -85,7 +87,7 @@ pm2 start ecosystem.config.js
 
 ### GET /health
 
-Проверка работоспособности.
+Health check endpoint.
 
 ```bash
 curl http://localhost:3000/health
@@ -95,13 +97,13 @@ curl http://localhost:3000/health
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-06-21T13:30:00.000Z"
+  "timestamp": "2026-06-21T16:30:00.000Z"
 }
 ```
 
 ### GET /icons
 
-Список кешированных иконок.
+List cached icons.
 
 ```bash
 curl http://localhost:3000/icons
@@ -111,26 +113,26 @@ curl http://localhost:3000/icons
 ```json
 {
   "count": 5,
-  "files": ["a1b2c3d4.png", "e5f6g7h8.png", ...]
+  "files": ["a1b2c3d4.png", "e5f6g7h8.png"]
 }
 ```
 
-## Примеры использования
+## Usage Examples
 
-### curl
+### cURL
 
 ```bash
-# Красная иконка робота
+# Red robot head
 curl -X POST http://localhost:3000/icon \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "robot-head", "color": "#FF0000"}'
+  -d '{"prompt": "robot head", "color": "#FF0000"}'
 
-# Синяя иконка звезды
+# Blue star
 curl -X POST http://localhost:3000/icon \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "star", "color": "3498db"}'
+  -d '{"prompt": "star", "color": "#3498db"}'
 
-# Зелёная иконка черепахи
+# Neon green turtle
 curl -X POST http://localhost:3000/icon \
   -H "Content-Type: application/json" \
   -d '{"prompt": "turtle", "color": "#27ae60"}'
@@ -139,19 +141,27 @@ curl -X POST http://localhost:3000/icon \
 ### JavaScript / Fetch
 
 ```javascript
-const response = await fetch('http://localhost:3000/icon', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    prompt: 'robot-head',
-    color: '#FF5733'
-  })
-});
+const generateIcon = async (prompt, color) => {
+  const response = await fetch('http://localhost:3000/icon', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, color })
+  });
+  
+  const { success, cacheKey, image } = await response.json();
+  
+  if (success) {
+    // Display in <img> tag
+    document.querySelector('#icon').src = image;
+    // Or save to file
+    const link = document.createElement('a');
+    link.download = `${cacheKey}.png`;
+    link.href = image;
+    link.click();
+  }
+};
 
-const { success, cacheKey, image } = await response.json();
-
-// Показать иконку в <img>
-document.querySelector('img').src = image;
+generateIcon('neon star', '#FF0055');
 ```
 
 ### Python
@@ -161,55 +171,50 @@ import requests
 import base64
 
 response = requests.post('http://localhost:3000/icon', json={
-    'prompt': 'robot-head',
-    'color': '#FF5733'
+    'prompt': 'neon star',
+    'color': '#FF0055'
 })
 
 data = response.json()
 if data['success']:
-    # Декодировать base64 и сохранить
+    # Decode base64 and save
     img_data = base64.b64decode(data['image'].split(',')[1])
     with open('icon.png', 'wb') as f:
         f.write(img_data)
 ```
 
-## Примеры сгенерированных иконок
+## How It Works
 
-### robot-head (#FF5733)
-![Robot Head](icons/example-robot-head.png)
+1. **Cache Check** - Request is checked against MD5(prompt:color)
+2. **Generate** - If cache miss, calls Ollama:
+   ```
+   ollama run x/flux2-klein:4b '{"icon":true,"style":"minimalistic","info":"<prompt>"}'
+   ```
+3. **Process** - Greyscale → Contrast boost → Crop to content → Resize 256x256
+4. **Color** - Apply user's color to dark areas, preserve white background
+5. **Cache** - Save to `icons/{cacheKey}.png`
 
-### star (#3498db)
-![Star](icons/example-star.png)
+## Example Output
 
-### turtle (#27ae60)
-![Turtle](icons/example-turtle.png)
+Generated icon: `icons/example-icon.png`
 
-## Структура проекта
+![Example Icon](icons/example-icon.png)
+
+## Project Structure
 
 ```
 iconGenerationServer/
 ├── src/
-│   ├── server.ts        # Express сервер
-│   ├── processImage.ts  # Обработка изображений
-│   └── const.ts         # Константы
-├── icons/               # Кеш иконок (PNG)
-├── dist/                # Скомпилированный JS
-├── ecosystem.config.js  # PM2 конфигурация
+│   ├── server.ts        # Express server & API endpoints
+│   ├── processImage.ts  # Image processing (greyscale, contrast, crop, resize)
+│   └── const.ts         # Constants (WIDTH, HEIGHT)
+├── icons/               # Icon cache directory
+├── dist/                # Compiled JavaScript
+├── ecosystem.config.js  # PM2 configuration
 ├── package.json
 └── tsconfig.json
 ```
 
-## Как работает
-
-1. **Проверка кеша** — запрос проверяется по MD5(prompt:color)
-2. **Генерация** — при cache miss вызывается Ollama:
-   ```
-   ollama run x/flux2-klein:4b '{"icon":true,"style":"minimalistic","info":"<prompt>"}'
-   ```
-3. **Обработка** — greyscale → contrast → crop → resize 256x256
-4. **Окрашивание** — blend по luminance (тёмные области окрашиваются сильнее)
-5. **Кеширование** — сохранение в icons/{cacheKey}.png
-
-## Лицензия
+## License
 
 Apache License 2.0

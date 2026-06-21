@@ -70,7 +70,8 @@ async function generateIconWithOllama(prompt: string): Promise<string> {
 }
 
 /**
- * Recolor image by blending with a solid color
+ * Recolor image by applying solid color with proper intensity
+ * Dark pixels get the full color, light pixels stay lighter
  */
 async function recolorImage(imageBuffer: Buffer, hexColor: string): Promise<Buffer> {
   const image = await Jimp.fromBuffer(imageBuffer);
@@ -79,30 +80,25 @@ async function recolorImage(imageBuffer: Buffer, hexColor: string): Promise<Buff
   const width = image.width;
   const height = image.height;
   
-  // Parse hex color
+  // Parse hex color to RGB
   const color = hexColor.replace('#', '');
   const r = parseInt(color.substring(0, 2), 16);
   const g = parseInt(color.substring(2, 4), 16);
   const b = parseInt(color.substring(4, 6), 16);
   
-  // Apply color tint by blending
+  // Apply color tint: darker areas get more color, lighter areas get less
   image.scan(0, 0, width, height, function(this: { bitmap: { data: Buffer } }, x: number, y: number, idx: number) {
-    // Get current pixel color
-    const currentR = this.bitmap.data[idx + 0];
-    const currentG = this.bitmap.data[idx + 1];
-    const currentB = this.bitmap.data[idx + 2];
+    // Get current pixel brightness (since greyscale, R=G=B)
+    const brightness = this.bitmap.data[idx] / 255;
     
-    // Calculate luminance of current pixel (for grayscale handling)
-    const luminance = (currentR + currentG + currentB) / 3 / 255;
+    // Invert: dark pixels (low brightness) should get more color
+    const colorIntensity = (1 - brightness);
     
-    // Blend: use luminance to determine how much color to apply
-    // Darker areas get the color, lighter areas stay light
-    const blendFactor = 1 - luminance;
-    
-    // Apply color
-    this.bitmap.data[idx + 0] = Math.round(currentR + (r - currentR) * blendFactor * 0.8);
-    this.bitmap.data[idx + 1] = Math.round(currentG + (g - currentG) * blendFactor * 0.8);
-    this.bitmap.data[idx + 2] = Math.round(currentB + (b - currentB) * blendFactor * 0.8);
+    // Apply color with intensity (stronger effect on dark pixels)
+    // For white backgrounds, this means only the content gets colored
+    this.bitmap.data[idx + 0] = Math.round(r * colorIntensity + this.bitmap.data[idx + 0] * (1 - colorIntensity));
+    this.bitmap.data[idx + 1] = Math.round(g * colorIntensity + this.bitmap.data[idx + 1] * (1 - colorIntensity));
+    this.bitmap.data[idx + 2] = Math.round(b * colorIntensity + this.bitmap.data[idx + 2] * (1 - colorIntensity));
   });
   
   return image.getBuffer('image/png');
@@ -151,7 +147,7 @@ app.post('/icon', async (req: Request, res: Response) => {
       // Process image (greyscale, contrast, crop, resize)
       const processedBuffer = await processImage(generatedImage);
       
-      // Recolor the image with the user's color (pass buffer directly)
+      // Recolor the image with the user's color
       const recoloredBuffer = await recolorImage(processedBuffer, hexColor);
       
       // Save to cache

@@ -97,8 +97,6 @@ export async function processImage(img: Buffer): Promise<Buffer> {
     const cropWidth = rightCrop - leftCrop;
     const cropHeight = bottomCrop - topCrop;
     
-    console.log(`Cropping: x=${leftCrop}, y=${topCrop}, w=${cropWidth}, h=${cropHeight}`);
-    
     // Apply crop and resize to 256x256
     const croppedImage = image.crop({
         x: leftCrop,

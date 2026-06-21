@@ -12,6 +12,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const ICONS_DIR = path.join(__dirname, '..', 'icons');
 
+// Threshold for background detection (brightness > this = transparent)
+const BG_THRESHOLD = 230;
+
 app.use(express.json());
 
 interface IconRequest {
@@ -70,35 +73,46 @@ async function generateIconWithOllama(prompt: string): Promise<string> {
 }
 
 /**
- * Recolor image by applying solid color with proper intensity
- * Dark pixels get the full color, light pixels stay lighter
+ * Process greyscale image to add color and transparency
+ * - White/bright pixels become fully transparent
+ * - Dark pixels get the target color
+ * - Alpha channel is properly set
  */
-async function recolorImage(imageBuffer: Buffer, hexColor: string): Promise<Buffer> {
+async function processWithColorAndTransparency(
+  imageBuffer: Buffer, 
+  hexColor: string
+): Promise<Buffer> {
   const image = await Jimp.fromBuffer(imageBuffer);
+  const { width, height } = image;
   
-  // Get image dimensions
-  const width = image.width;
-  const height = image.height;
-  
-  // Parse hex color to RGB
+  // Parse hex color to RGB (0-255)
   const color = hexColor.replace('#', '');
-  const r = parseInt(color.substring(0, 2), 16);
-  const g = parseInt(color.substring(2, 4), 16);
-  const b = parseInt(color.substring(4, 6), 16);
+  const targetR = parseInt(color.substring(0, 2), 16);
+  const targetG = parseInt(color.substring(2, 4), 16);
+  const targetB = parseInt(color.substring(4, 6), 16);
   
-  // Apply color tint: darker areas get more color, lighter areas get less
+  // First pass: apply color based on luminance, mark transparent pixels
   image.scan(0, 0, width, height, function(this: { bitmap: { data: Buffer } }, x: number, y: number, idx: number) {
-    // Get current pixel brightness (since greyscale, R=G=B)
+    // Get pixel brightness (since greyscale, R=G=B)
     const brightness = this.bitmap.data[idx] / 255;
     
-    // Invert: dark pixels (low brightness) should get more color
-    const colorIntensity = (1 - brightness);
-    
-    // Apply color with intensity (stronger effect on dark pixels)
-    // For white backgrounds, this means only the content gets colored
-    this.bitmap.data[idx + 0] = Math.round(r * colorIntensity + this.bitmap.data[idx + 0] * (1 - colorIntensity));
-    this.bitmap.data[idx + 1] = Math.round(g * colorIntensity + this.bitmap.data[idx + 1] * (1 - colorIntensity));
-    this.bitmap.data[idx + 2] = Math.round(b * colorIntensity + this.bitmap.data[idx + 2] * (1 - colorIntensity));
+    if (brightness > BG_THRESHOLD / 255) {
+      // Background: make fully transparent
+      this.bitmap.data[idx + 0] = 0;
+      this.bitmap.data[idx + 1] = 0;
+      this.bitmap.data[idx + 2] = 0;
+      this.bitmap.data[idx + 3] = 0; // Alpha = 0 (transparent)
+    } else {
+      // Content: apply color based on darkness
+      // Darker pixels (lower brightness) get more color intensity
+      const colorIntensity = Math.pow(1 - brightness, 1.5); // Non-linear for better results
+      
+      // Apply color
+      this.bitmap.data[idx + 0] = Math.round(targetR * colorIntensity);
+      this.bitmap.data[idx + 1] = Math.round(targetG * colorIntensity);
+      this.bitmap.data[idx + 2] = Math.round(targetB * colorIntensity);
+      this.bitmap.data[idx + 3] = 255; // Alpha = 255 (opaque)
+    }
   });
   
   return image.getBuffer('image/png');
@@ -132,14 +146,10 @@ app.post('/icon', async (req: Request, res: Response) => {
     
     // Check cache
     if (fs.existsSync(cachedPath)) {
-      console.log(`Cache hit for key: ${cacheKey}`);
       imageBuffer = fs.readFileSync(cachedPath);
     } else {
-      console.log(`Cache miss for key: ${cacheKey}, generating...`);
-      
       // Generate with Ollama
       const generatedPath = await generateIconWithOllama(prompt);
-      console.log(`Generated image at: ${generatedPath}`);
       
       // Read generated image
       const generatedImage = fs.readFileSync(generatedPath);
@@ -147,16 +157,13 @@ app.post('/icon', async (req: Request, res: Response) => {
       // Process image (greyscale, contrast, crop, resize)
       const processedBuffer = await processImage(generatedImage);
       
-      // Recolor the image with the user's color
-      const recoloredBuffer = await recolorImage(processedBuffer, hexColor);
+      // Apply color with transparency
+      imageBuffer = await processWithColorAndTransparency(processedBuffer, hexColor);
       
       // Save to cache
-      fs.writeFileSync(cachedPath, recoloredBuffer);
-      console.log(`Cached image at: ${cachedPath}`);
+      fs.writeFileSync(cachedPath, imageBuffer);
       
-      imageBuffer = recoloredBuffer;
-      
-      // Clean up generated file (keep only cached)
+      // Clean up generated file
       try {
         fs.unlinkSync(generatedPath);
       } catch (e) {

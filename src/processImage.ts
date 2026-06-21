@@ -1,7 +1,7 @@
 import { Jimp } from 'jimp'
 import { HEIGHT, WIDTH } from './const';
 
-export async function processImage(img: Buffer) {
+export async function processImage(img: Buffer): Promise<Buffer> {
     let image = (await Jimp.fromBuffer(img))
         .greyscale()
         .contrast(1)

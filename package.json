@@ -1,9 +1,8 @@
 {
   "name": "icongenerationserver",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts"
@@ -12,14 +11,20 @@
     "type": "git",
     "url": "git+https://github.com/Graphnull/iconGenerationServer.git"
   },
-  "keywords": [],
+  "keywords": [
+    "icon",
+    "generation",
+    "ollama",
+    "express",
+    "api"
+  ],
   "author": "",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/Graphnull/iconGenerationServer/issues"
   },
   "homepage": "https://github.com/Graphnull/iconGenerationServer#readme",
-  "description": "",
+  "description": "Express server for generating icons using Ollama AI with caching and color customization",
   "dependencies": {
     "express": "^5.2.1",
     "jimp": "^1.6.1",
